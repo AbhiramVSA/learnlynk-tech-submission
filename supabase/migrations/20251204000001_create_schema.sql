@@ -63,3 +63,11 @@ create index if not exists tasks_due_idx on public.tasks(due_at);
 create index if not exists tasks_status_idx on public.tasks(status);
 create index if not exists tasks_tenant_due_idx on public.tasks(tenant_id, due_at);
 create index if not exists tasks_lookup_idx on public.tasks(tenant_id, due_at, status);
+
+-- user_teams junction table (needed for RLS)
+create table if not exists public.user_teams (
+  user_id uuid not null,
+  team_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, team_id)
+);

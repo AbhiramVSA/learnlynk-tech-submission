@@ -165,3 +165,15 @@ Write **8–12 lines** describing how you would implement a Stripe Checkout flow
 3. Share the link.
 
 Good luck.
+
+---
+
+## Stripe Answer
+
+When the user clicks "Pay Application Fee", I'd first create a `payment_requests` row with the `application_id`, amount, and status set to `pending`. This gives us a record before we even hit Stripe.
+
+Then on the backend (probably an edge function), I'd call `stripe.checkout.sessions.create()` with the line items, success/cancel URLs, and pass the `payment_request_id` in the metadata so we can link it back later. I'd store the `session_id` from Stripe in our `payment_requests` table and redirect the user to checkout.
+
+For webhooks, I'd set up an endpoint to listen for `checkout.session.completed`. First thing is verifying the signature with `stripe.webhooks.constructEvent()` - never skip this. Then I'd pull the `payment_request_id` from `session.metadata`, mark that payment as `completed`, and update the application's `payment_status` to `paid`. Might also bump the application stage if that's part of the flow.
+
+If the session expires or payment fails, I'd catch those webhook events too and mark the payment request as `failed` so we know to prompt the user to try again.
