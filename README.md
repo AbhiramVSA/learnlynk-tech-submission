@@ -170,10 +170,14 @@ Good luck.
 
 ## Stripe Answer
 
-When the user clicks "Pay Application Fee", I'd first create a `payment_requests` row with the `application_id`, amount, and status set to `pending`. This gives us a record before we even hit Stripe.
+- I would start by inserting a pending record into my payment_requests table before I even ping Stripe's API; you need that local state just in case the user closes the window or the network hangs.
 
-Then on the backend (probably an edge function), I'd call `stripe.checkout.sessions.create()` with the line items, success/cancel URLs, and pass the `payment_request_id` in the metadata so we can link it back later. I'd store the `session_id` from Stripe in our `payment_requests` table and redirect the user to checkout.
+- Next, I hit the v1/checkout/sessions endpoint with mode='payment', making sure to pass the application_fee_amount inside the payment_intent_data object so the split is handled automatically by Connect.
 
-For webhooks, I'd set up an endpoint to listen for `checkout.session.completed`. First thing is verifying the signature with `stripe.webhooks.constructEvent()` - never skip this. Then I'd pull the `payment_request_id` from `session.metadata`, mark that payment as `completed`, and update the application's `payment_status` to `paid`. Might also bump the application stage if that's part of the flow.
+- Once I get the response, I grab session ID and update my local record, that ID is the critical for reconciliation later and only then do I redirect the user's browser to the hosted Checkout page.
 
-If the session expires or payment fails, I'd catch those webhook events too and mark the payment request as `failed` so we know to prompt the user to try again.
+- For fulfillment, I would not trust the client-side success redirect. instead, I set up a webhook listener specifically for the checkout.session.completed event to act as the single source of truth.
+
+- When that webhook fires, I verify the signature to ensure it's actually from Stripe, then use the session ID from the payload to look up the original pending request and confirm the payment status is valid.
+
+- Finally, I update the local database status to succeeded, capture the payment_intent_id for potential refunds down the line, and trigger the actual business logic to unlock the feature for the user.
